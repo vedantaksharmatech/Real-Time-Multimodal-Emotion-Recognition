@@ -1,57 +1,67 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow.keras import layers, models
 import pickle
-import os
 
-def train_model():
+# Load data
+X_train = np.load("models/X_train.npy")
+X_test = np.load("models/X_test.npy")
+y_train = np.load("models/y_train.npy")
+y_test = np.load("models/y_test.npy")
 
-    # Load data
-    X_train = np.load("models/X_train.npy")
-    X_test = np.load("models/X_test.npy")
-    y_train = np.load("models/y_train.npy")
-    y_test = np.load("models/y_test.npy")
+# Load label encoder
+with open("models/label_encoder.pkl", "rb") as f:
+    label_encoder = pickle.load(f)
 
-    print("Training data shape:", X_train.shape)
+num_classes = len(label_encoder.classes_)
+print("Number of classes:", num_classes)
 
-    # Get number of classes
-    num_classes = len(np.unique(y_train))
+# ---------------- OLD MODEL (Dense-only before CNN) ----------------
+# model = models.Sequential([
+#     layers.Input(shape=(X_train.shape[1], X_train.shape[2], 1)),
+#     layers.Flatten(),
+#     layers.Dense(256, activation='relu'),
+#     layers.Dropout(0.3),
+#     layers.Dense(128, activation='relu'),
+#     layers.Dropout(0.3),
+#     layers.Dense(num_classes, activation='softmax')
+# ])
+# -------------------------------------------------------------------
 
-    # Build Model
-    model = keras.Sequential([
-    keras.Input(shape=(X_train.shape[1],)),  # Explicit Input layer
-    layers.Dense(256, activation='relu'),
-    layers.Dropout(0.3),
+# ---------------- CURRENT CNN MODEL ----------------
+model = models.Sequential([
+
+    layers.Conv2D(32, (3,3), activation='relu', input_shape=(40,174,1)),
+    layers.MaxPooling2D((2,2)),
+
+    layers.Conv2D(64, (3,3), activation='relu'),
+    layers.MaxPooling2D((2,2)),
+
+    layers.Conv2D(128, (3,3), activation='relu'),
+    layers.MaxPooling2D((2,2)),
+
+    layers.Flatten(),
     layers.Dense(128, activation='relu'),
     layers.Dropout(0.3),
+
     layers.Dense(num_classes, activation='softmax')
 ])
+# -------------------------------------------------------------------
 
-    # Compile
-    model.compile(
-        optimizer='adam',
-        loss='sparse_categorical_crossentropy',
-        metrics=['accuracy']
-    )
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
 
-    # Train
-    history = model.fit(
-        X_train, y_train,
-        epochs=50,
-        batch_size=32,
-        validation_data=(X_test, y_test)
-    )
+model.summary()
 
-    # Evaluate
-    test_loss, test_acc = model.evaluate(X_test, y_test)
-    print("\nTest Accuracy:", test_acc)
+history = model.fit(
+    X_train, y_train,
+    epochs=30,
+    batch_size=32,
+    validation_data=(X_test, y_test)
+)
 
-    # Save model
-    os.makedirs("models", exist_ok=True)
-    model.save("models/emotion_model.h5")
-
-    print("\nModel saved successfully!")
-
-if __name__ == "__main__":
-    train_model()
+model.save("models/audio_cnn_model.h5")
+print("Model training complete and saved!")
