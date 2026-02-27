@@ -3,7 +3,10 @@ import tensorflow as tf
 from tensorflow.keras import layers, models
 import pickle
 
-# Load data
+# ==============================
+# LOAD DATA
+# ==============================
+
 X_train = np.load("models/X_train.npy")
 X_test = np.load("models/X_test.npy")
 y_train = np.load("models/y_train.npy")
@@ -15,6 +18,14 @@ with open("models/label_encoder.pkl", "rb") as f:
 
 num_classes = len(label_encoder.classes_)
 print("Number of classes:", num_classes)
+
+# ==============================
+# CHECK CLASS DISTRIBUTION
+# ==============================
+
+unique, counts = np.unique(y_train, return_counts=True)
+print("\nTraining class distribution:")
+print(dict(zip(unique, counts)))
 
 # ---------------- OLD MODEL (Dense-only before CNN) ----------------
 # model = models.Sequential([
@@ -28,7 +39,10 @@ print("Number of classes:", num_classes)
 # ])
 # -------------------------------------------------------------------
 
-# ---------------- CURRENT CNN MODEL ----------------
+# ==============================
+# CURRENT CNN MODEL
+# ==============================
+
 model = models.Sequential([
 
     layers.Conv2D(32, (3,3), activation='relu', input_shape=(40,174,1)),
@@ -46,7 +60,10 @@ model = models.Sequential([
 
     layers.Dense(num_classes, activation='softmax')
 ])
-# -------------------------------------------------------------------
+
+# ==============================
+# COMPILE
+# ==============================
 
 model.compile(
     optimizer='adam',
@@ -56,6 +73,10 @@ model.compile(
 
 model.summary()
 
+# ==============================
+# TRAIN
+# ==============================
+
 history = model.fit(
     X_train, y_train,
     epochs=30,
@@ -63,5 +84,16 @@ history = model.fit(
     validation_data=(X_test, y_test)
 )
 
+# ==============================
+# PRINT FINAL ACCURACY
+# ==============================
+
+print("\nFinal Training Accuracy:", history.history['accuracy'][-1])
+print("Final Validation Accuracy:", history.history['val_accuracy'][-1])
+
+# ==============================
+# SAVE MODEL
+# ==============================
+
 model.save("models/audio_cnn_model.h5")
-print("Model training complete and saved!")
+print("\nModel training complete and saved!")
