@@ -1,6 +1,7 @@
 import os
 import numpy as np
-from preprocess import extract_features
+#from preprocess import extract_features -> replacing with the 4th line
+from src.audio.preprocess import extract_features
 
 # NEW 4-CLASS EMOTION MAPPING
 # Mapping 8 original emotions -> 4 final emotions

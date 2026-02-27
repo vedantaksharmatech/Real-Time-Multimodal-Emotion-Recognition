@@ -16,8 +16,12 @@ y_test = np.load("models/y_test.npy")
 with open("models/label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
 
+# -----------------------------
+# UPDATE: Check number of classes
+# -----------------------------
+# Since we modified build_dataset.py to 4 classes
 num_classes = len(label_encoder.classes_)
-print("Number of classes:", num_classes)
+print("Number of classes:", num_classes)  # Should print 4: ['angry', 'fear', 'happy', 'sad']
 
 # ==============================
 # CHECK CLASS DISTRIBUTION
@@ -27,7 +31,10 @@ unique, counts = np.unique(y_train, return_counts=True)
 print("\nTraining class distribution:")
 print(dict(zip(unique, counts)))
 
-# ---------------- OLD MODEL (Dense-only before CNN) ----------------
+# ==============================
+# OLD DENSE MODEL (Kept Commented)
+# ==============================
+
 # model = models.Sequential([
 #     layers.Input(shape=(X_train.shape[1], X_train.shape[2], 1)),
 #     layers.Flatten(),
@@ -35,9 +42,8 @@ print(dict(zip(unique, counts)))
 #     layers.Dropout(0.3),
 #     layers.Dense(128, activation='relu'),
 #     layers.Dropout(0.3),
-#     layers.Dense(num_classes, activation='softmax')
+#     layers.Dense(num_classes, activation='softmax')  # Updated automatically for 4 classes
 # ])
-# -------------------------------------------------------------------
 
 # ==============================
 # CURRENT CNN MODEL
@@ -58,6 +64,9 @@ model = models.Sequential([
     layers.Dense(128, activation='relu'),
     layers.Dropout(0.3),
 
+    # ==============================
+    # UPDATE: FINAL LAYER FOR 4 CLASSES
+    # ==============================
     layers.Dense(num_classes, activation='softmax')
 ])
 
@@ -67,7 +76,7 @@ model = models.Sequential([
 
 model.compile(
     optimizer='adam',
-    loss='sparse_categorical_crossentropy',
+    loss='sparse_categorical_crossentropy',  # No change needed
     metrics=['accuracy']
 )
 
