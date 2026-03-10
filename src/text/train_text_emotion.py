@@ -1,101 +1,89 @@
 import os
 import pandas as pd
-import pickle
+from datasets import load_dataset, Dataset
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-
-# ---------------------------------------------------
-# STEP 1: Create training data
-# ---------------------------------------------------
-
-data = {
-    "text": [
-        "I am very happy today",
-        "This is the best day ever",
-        "I feel amazing and joyful",
-        "I am so sad and depressed",
-        "I feel terrible today",
-        "This is very disappointing",
-        "I am extremely angry",
-        "I can't believe you did that",
-        "This makes me furious",
-        "I am scared and nervous",
-        "I feel afraid right now",
-        "I am worried about everything"
-    ],
-    "emotion": [
-        "happy",
-        "happy",
-        "happy",
-        "sad",
-        "sad",
-        "sad",
-        "angry",
-        "angry",
-        "angry",
-        "fear",
-        "fear",
-        "fear"
-    ]
-}
-
-df = pd.DataFrame(data)
-
-# ---------------------------------------------------
-# STEP 2: Train-test split (FIXED)
-# ---------------------------------------------------
-
-X_train, X_test, y_train, y_test = train_test_split(
-    df["text"],
-    df["emotion"],
-    test_size=0.33,   # <-- FIXED
-    random_state=42,
-    stratify=df["emotion"]
+from transformers import (
+    DistilBertTokenizerFast,
+    DistilBertForSequenceClassification,
+    Trainer,
+    TrainingArguments,
+    DataCollatorWithPadding
 )
 
-# ---------------------------------------------------
-# STEP 3: TF-IDF Vectorization
-# ---------------------------------------------------
+print("Loading GoEmotions parquet dataset locally...")
 
-vectorizer = TfidfVectorizer(
-    lowercase=True,
-    stop_words="english"
+dataset = load_dataset(
+    "parquet",
+    data_files="data/text/goemotions/train-00000-of-00001.parquet"
+)
+                                        
+df = dataset["train"].to_pandas()
+
+print("Columns in dataset:", df.columns)
+print("Total samples:", len(df))
+
+# Labels column contains list of emotion indices
+# Example: [3, 15]
+
+# Convert multi-label to single label by taking first label
+df = df[df["labels"].map(len) > 0]  # remove empty labels
+df["label"] = df["labels"].apply(lambda x: x[0])
+
+df = df[["text", "label"]]
+
+# Get number of unique labels 
+num_labels = df["label"].nunique()
+
+print("Number of emotion classes:", num_labels)
+
+# Split dataset
+train_df, val_df = train_test_split(df, test_size=0.1, random_state=42)
+
+train_dataset = Dataset.from_pandas(train_df)
+val_dataset = Dataset.from_pandas(val_df)
+
+tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
+
+def tokenize(batch):
+    return tokenizer(batch["text"], truncation=True)
+
+train_dataset = train_dataset.map(tokenize, batched=True)
+val_dataset = val_dataset.map(tokenize, batched=True)
+
+train_dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
+val_dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
+
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+model = DistilBertForSequenceClassification.from_pretrained(
+    "distilbert-base-uncased",
+    num_labels=num_labels
 )
 
-X_train_vec = vectorizer.fit_transform(X_train)
-X_test_vec = vectorizer.transform(X_test)
+training_args = TrainingArguments(
+    output_dir="models/text_emotion",
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=8,
+    num_train_epochs=1,
+    save_strategy="epoch",
+    logging_steps=100,
+    report_to="none"
+)
 
-# ---------------------------------------------------
-# STEP 4: Train classifier
-# ---------------------------------------------------
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    data_collator=data_collator
+)
 
-model = LogisticRegression(max_iter=1000)
-model.fit(X_train_vec, y_train)
+print("Starting training...")
+trainer.train()
 
-# ---------------------------------------------------
-# STEP 5: Evaluate
-# ---------------------------------------------------
+print("Saving model...")
+trainer.save_model("models/text_emotion")
+tokenizer.save_pretrained("models/text_emotion")
 
-y_pred = model.predict(X_test_vec)
+print("Training complete.")
 
-print("\nClassification Report:\n")
-print(classification_report(y_test, y_pred))
-
-# ---------------------------------------------------
-# STEP 6: Save model
-# ---------------------------------------------------
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_DIR = os.path.join(BASE_DIR, "models")
-
-os.makedirs(MODEL_DIR, exist_ok=True)
-
-with open(os.path.join(MODEL_DIR, "text_vectorizer.pkl"), "wb") as f:
-    pickle.dump(vectorizer, f)
-
-with open(os.path.join(MODEL_DIR, "text_emotion_model.pkl"), "wb") as f:
-    pickle.dump(model, f)
-
-print("\nText emotion model trained and saved successfully!")
